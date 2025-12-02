@@ -76,3 +76,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ✔ ONLY the missing utility classes (DO NOT REMOVE ANYTHING ELSE) */
+@layer utilities {
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+
+  .bg-background {
+    background-color: hsl(var(--background));
+  }
+
+  .text-foreground {
+    color: hsl(var(--foreground));
+  }
+}

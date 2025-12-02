@@ -26,12 +26,14 @@ import {
   onSnapshot,
   Timestamp,
   deleteDoc,
+  GeoPoint,
+  limit,
 } from "firebase/firestore";
 
 import { getDatabase, ref, set as rtdbSet, get as rtdbGet } from "firebase/database";
 
 /**
- * Your firebase config (keep as you had it)
+ * Firebase config
  */
 const firebaseConfig = {
   apiKey: "AIzaSyC9EXClZus1Zi7221Vx7ZnxO-72Jwh31jw",
@@ -47,6 +49,75 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const rtdb = getDatabase(app);
+
+/* ============================
+   TYPES
+   ============================ */
+
+export interface Location {
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+  speed?: number;
+  heading?: number;
+}
+
+export interface Driver {
+  id: string;
+  name: string;
+  phone: string;
+  vehicleNumber: string;
+  vehicleType: 'bus' | 'van';
+  capacity: number;
+  status: 'active' | 'idle' | 'offline';
+  currentLocation?: Location;
+  currentPassengers: number;
+  route?: string;
+}
+
+export interface Ride {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentPhone: string;
+  pickup: string;
+  pickupCoords: { lat: number; lng: number };
+  destination: string;
+  destinationCoords: { lat: number; lng: number };
+  status: 'pending' | 'accepted' | 'assigned' | 'in-progress' | 'completed' | 'cancelled';
+  requestTime: Date;
+  assignedDriver?: {
+    driverId: string;
+    driverName: string;
+    vehicleNumber: string;
+    driverPhone?: string;
+  };
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+  assignedTime?: Date;
+  acceptedAt?: Date;
+  startedAt?: Date;
+  pickupTime?: Date;
+  completedTime?: Date;
+  cancelledAt?: Date;
+  type: 'on-demand' | 'scheduled';
+  driverLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: Date;
+  };
+}
+
+export interface DemandZone {
+  zone: string;
+  lat: number;
+  lng: number;
+  demand: number;
+  timestamp: Date;
+  predictedDemand?: number;
+}
 
 /* ============================
    AUTH
@@ -88,8 +159,6 @@ export const setUserRole = async (uid: string, role: string) => {
     console.warn("RTDB role set failed:", e);
   }
 };
-
-// Replace the getUserRole function in your firebase.ts with this:
 
 export const getUserRole = async (uid: string) => {
   try {
@@ -254,8 +323,15 @@ export const assignRide = async (rideId: string, driverData: any) => {
     driverName: driverData.driverName,
     driverPhone: driverData.driverPhone || null,
     vehicleNumber: driverData.vehicleNumber || null,
+    assignedDriver: {
+      driverId: driverData.driverId,
+      driverName: driverData.driverName,
+      vehicleNumber: driverData.vehicleNumber,
+      driverPhone: driverData.driverPhone || null,
+    },
     status: "accepted",
     acceptedAt: Timestamp.now(),
+    assignedTime: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });
 };
@@ -269,6 +345,7 @@ export const startRide = async (rideId: string, driverId?: string) => {
   await updateDoc(doc(db, "rides", rideId), {
     status: "in-progress",
     startedAt: Timestamp.now(),
+    pickupTime: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });
 };
@@ -288,6 +365,188 @@ export const updateDriverLocation = async (rideId: string, lat: number, lng: num
     updatedAt: Timestamp.now(),
   });
 };
+
+/* ============================
+   NEW: ADMIN PORTAL FUNCTIONS
+   ============================ */
+
+// Real-time listener for pending rides
+export function subscribeToPendingRides(callback: (rides: Ride[]) => void) {
+  const q = query(
+    collection(db, 'rides'),
+    where('status', '==', 'pending'),
+    orderBy('requestTime', 'desc')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const rides: Ride[] = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      rides.push({
+        id: doc.id,
+        studentId: data.studentId,
+        studentName: data.studentName,
+        studentPhone: data.studentPhone,
+        pickup: data.pickup,
+        pickupCoords: data.pickupCoords?.latitude 
+          ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude }
+          : { lat: 0, lng: 0 },
+        destination: data.destination,
+        destinationCoords: data.destinationCoords?.latitude
+          ? { lat: data.destinationCoords.latitude, lng: data.destinationCoords.longitude }
+          : { lat: 0, lng: 0 },
+        status: data.status,
+        requestTime: data.requestTime?.toDate() || new Date(),
+        type: data.type || 'on-demand',
+        assignedDriver: data.assignedDriver,
+        driverId: data.driverId,
+        driverName: data.driverName,
+        driverPhone: data.driverPhone,
+        vehicleNumber: data.vehicleNumber,
+        assignedTime: data.assignedTime?.toDate(),
+        acceptedAt: data.acceptedAt?.toDate(),
+        startedAt: data.startedAt?.toDate(),
+        pickupTime: data.pickupTime?.toDate(),
+        completedTime: data.completedTime?.toDate(),
+        cancelledAt: data.cancelledAt?.toDate(),
+        driverLocation: data.driverLocation ? {
+          lat: data.driverLocation.lat,
+          lng: data.driverLocation.lng,
+          timestamp: data.driverLocation.timestamp?.toDate() || new Date()
+        } : undefined
+      } as Ride);
+    });
+    callback(rides);
+  }, (error) => {
+    console.error('Error in subscribeToPendingRides:', error);
+    callback([]);
+  });
+}
+
+// Real-time listener for active drivers
+export function subscribeToActiveDrivers(callback: (drivers: Driver[]) => void) {
+  const q = query(
+    collection(db, 'drivers'),
+    where('status', 'in', ['active', 'idle'])
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const drivers: Driver[] = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      drivers.push({
+        id: doc.id,
+        name: data.name,
+        phone: data.phone,
+        vehicleNumber: data.vehicleNumber,
+        vehicleType: data.vehicleType,
+        capacity: data.capacity,
+        status: data.status,
+        currentPassengers: data.currentPassengers || 0,
+        route: data.route,
+        currentLocation: data.currentLocation ? {
+          latitude: data.currentLocation.coordinates?.latitude || 0,
+          longitude: data.currentLocation.coordinates?.longitude || 0,
+          timestamp: data.currentLocation.timestamp?.toDate() || new Date(),
+          speed: data.currentLocation.speed,
+          heading: data.currentLocation.heading
+        } : undefined
+      } as Driver);
+    });
+    callback(drivers);
+  }, (error) => {
+    console.error('Error in subscribeToActiveDrivers:', error);
+    callback([]);
+  });
+}
+
+// Get historical ride data for ML training
+export async function getHistoricalRideData(days: number = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const q = query(
+    collection(db, 'rides'),
+    where('requestTime', '>=', Timestamp.fromDate(startDate)),
+    orderBy('requestTime', 'asc')
+  );
+
+  const snapshot = await getDocs(q);
+  const rides: any[] = [];
+  
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    rides.push({
+      id: doc.id,
+      ...data,
+      requestTime: data.requestTime?.toDate(),
+      pickupCoords: data.pickupCoords?.latitude
+        ? { lat: data.pickupCoords.latitude, lng: data.pickupCoords.longitude }
+        : { lat: 0, lng: 0 }
+    });
+  });
+
+  return rides;
+}
+
+// Update demand zone data
+export async function updateDemandZone(zoneData: Omit<DemandZone, 'timestamp'>) {
+  try {
+    await addDoc(collection(db, 'demandZones'), {
+      ...zoneData,
+      timestamp: Timestamp.now()
+    });
+  } catch (error) {
+    console.error('Error updating demand zone:', error);
+    throw error;
+  }
+}
+
+// Get recent demand data for a zone
+export async function getZoneDemandHistory(zone: string, hours: number = 24) {
+  const startTime = new Date();
+  startTime.setHours(startTime.getHours() - hours);
+
+  const q = query(
+    collection(db, 'demandZones'),
+    where('zone', '==', zone),
+    where('timestamp', '>=', Timestamp.fromDate(startTime)),
+    orderBy('timestamp', 'desc'),
+    limit(100)
+  );
+
+  const snapshot = await getDocs(q);
+  const data: any[] = [];
+  
+  snapshot.forEach((doc) => {
+    const docData = doc.data();
+    data.push({
+      ...docData,
+      timestamp: docData.timestamp?.toDate()
+    });
+  });
+
+  return data;
+}
+
+// Update driver location in drivers collection
+export async function updateDriverLocationInDriversCollection(driverId: string, location: Location) {
+  try {
+    const driverRef = doc(db, 'drivers', driverId);
+    await updateDoc(driverRef, {
+      currentLocation: {
+        coordinates: new GeoPoint(location.latitude, location.longitude),
+        timestamp: Timestamp.now(),
+        speed: location.speed || 0,
+        heading: location.heading || 0
+      },
+      lastSeen: Timestamp.now()
+    });
+  } catch (error) {
+    console.error('Error updating driver location:', error);
+    throw error;
+  }
+}
 
 /* ============================
    Misc

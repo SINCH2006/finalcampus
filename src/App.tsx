@@ -19,17 +19,16 @@ import TrackRide from "./pages/student/TrackRide";
 
 // Driver pages
 import DriverDashboard from "./pages/driver/Dashboard";
-import DriverLocation from "./pages/driver/Location";   // ⭐ ADDED
+import DriverLocation from "./pages/driver/Location";   
 
-// Admin page
+// Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminHeatmap from "./pages/admin/Heatmap";          // ⭐ ADD
+import AdminVehicles from "./pages/admin/Vehicles";        // ⭐ ADD
+import AdminReports from "./pages/admin/Reports";          // ⭐ ADD
 
-// Protected Route
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminSetup from './pages/AdminSetup';
-
-// Add this route temporarily
-
 
 function App() {
   return (
@@ -102,7 +101,7 @@ function App() {
         />
 
         <Route
-          path="/driver/location"     // ⭐ FIXED
+          path="/driver/location"
           element={
             <ProtectedRoute requiredRole="DRIVER">
               <DriverLocation />
@@ -110,12 +109,42 @@ function App() {
           }
         />
 
-        {/* Admin protected routes */}
+        {/* ----------------------------- */}
+        {/* ADMIN protected routes        */}
+        {/* ----------------------------- */}
+
         <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute requiredRole="ADMIN">
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/vehicles"
+          element={
+            <ProtectedRoute requiredRole="ADMIN">
+              <AdminVehicles />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/heatmap"
+          element={
+            <ProtectedRoute requiredRole="ADMIN">
+              <AdminHeatmap />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/reports"
+          element={
+            <ProtectedRoute requiredRole="ADMIN">
+              <AdminReports />
             </ProtectedRoute>
           }
         />

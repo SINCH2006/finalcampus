@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import StatCard from "@/components/StatCard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MapPin, Clock, CheckCircle, XCircle, Users } from "lucide-react";
+import { MapPin, Clock, CheckCircle, XCircle, Users, Route } from "lucide-react";
 
 // IMPORTANT: import MapContainer + TileLayer + Marker from react-leaflet
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
@@ -37,6 +37,7 @@ L.Icon.Default.mergeOptions({
 export default function DriverDashboard() {
   const [currentRide, setCurrentRide] = useState<any | null>(null);
   const [allRides, setAllRides] = useState<any[]>([]);
+  const [assignedRoutes, setAssignedRoutes] = useState<any[]>([]);
   const [driver, setDriver] = useState<any>({
     driverName: "Driver",
     vehicleNumber: "CAM-001",
@@ -67,6 +68,12 @@ export default function DriverDashboard() {
 
         const rides = await getDriverRides(user.uid);
         setAllRides(rides);
+
+        // Filter for assigned routes (status: 'accepted' or 'pending' assigned to this driver)
+        const routes = rides.filter((r: any) => 
+          r.status === "accepted" || r.status === "pending"
+        );
+        setAssignedRoutes(routes);
 
         const active =
           rides.find((r: any) => r.status === "in-progress") ||
@@ -220,6 +227,72 @@ export default function DriverDashboard() {
             <p className="text-muted-foreground">No ride assigned yet</p>
           </Card>
         )}
+
+        {/* Assigned Routes Section */}
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Route className="h-5 w-5 text-primary" />
+            <h3 className="text-xl font-bold">Assigned Routes</h3>
+          </div>
+          
+          {assignedRoutes.length > 0 ? (
+            <div className="space-y-3">
+              {assignedRoutes.map((route) => (
+                <Card key={route.id} className="p-4 bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">
+                          {route.studentName || "Student"}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          route.status === "accepted" 
+                            ? "bg-blue-100 text-blue-700" 
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {route.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          <span className="text-muted-foreground">
+                            {route.pickup}
+                          </span>
+                        </div>
+                        
+                        <span className="text-muted-foreground">→</span>
+                        
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-accent" />
+                          <span className="text-muted-foreground">
+                            {route.destination}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {route.requestTime && (
+                        <p className="text-xs text-muted-foreground">
+                          Requested: {new Date(
+                            route.requestTime?.seconds
+                              ? route.requestTime.toDate()
+                              : route.requestTime
+                          ).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Route className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>No routes assigned by admin yet</p>
+            </div>
+          )}
+        </Card>
 
         <Card className="p-4">
           <h3 className="text-lg font-bold mb-4">Current Route</h3>
