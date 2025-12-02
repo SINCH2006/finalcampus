@@ -89,18 +89,38 @@ export const setUserRole = async (uid: string, role: string) => {
   }
 };
 
+// Replace the getUserRole function in your firebase.ts with this:
+
 export const getUserRole = async (uid: string) => {
-  const docSnap = await getDoc(doc(db, "users", uid));
-  if (docSnap.exists() && (docSnap.data() as any).role) {
-    return (docSnap.data() as any).role;
-  }
   try {
-    const snapshot: any = await rtdbGet(ref(rtdb, `users/${uid}/role`));
-    if (snapshot && snapshot.exists && snapshot.val) {
-      return snapshot.val();
+    // Try Firestore first
+    const docSnap = await getDoc(doc(db, "users", uid));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && data.role) {
+        console.log("Role from Firestore:", data.role);
+        return data.role;
+      }
     }
-  } catch (e) {}
-  return null;
+    
+    // Fallback to RTDB
+    try {
+      const snapshot = await rtdbGet(ref(rtdb, `users/${uid}/role`));
+      if (snapshot && snapshot.exists()) {
+        const role = snapshot.val();
+        console.log("Role from RTDB:", role);
+        return role;
+      }
+    } catch (rtdbError) {
+      console.warn("RTDB read failed:", rtdbError);
+    }
+    
+    console.log("No role found for user:", uid);
+    return null;
+  } catch (error) {
+    console.error("Error getting user role:", error);
+    throw error;
+  }
 };
 
 export const createUserProfile = async (uid: string, profileData: any) => {

@@ -26,6 +26,10 @@ import AdminDashboard from "./pages/admin/Dashboard";
 
 // Protected Route
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminSetup from './pages/AdminSetup';
+
+// Add this route temporarily
+
 
 function App() {
   return (
@@ -39,6 +43,7 @@ function App() {
         <Route path="/student/login" element={<StudentLogin />} />
         <Route path="/driver/login" element={<DriverLogin />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin-setup" element={<AdminSetup />} />
 
         {/* Student protected routes */}
         <Route
